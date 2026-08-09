@@ -3,7 +3,7 @@ echo "Inside script:"
 which go
 go version
 name="Test"
-expected="Hello, Test!"
+expected="Hello, Test!!!"
 
 actual=$(go run main.go "$name")
 
