@@ -10,5 +10,6 @@ func Greet(name string) string {
 }
 
 func main() {
+	// Print result
 	fmt.Println(Greet(os.Args[1]))
 }
