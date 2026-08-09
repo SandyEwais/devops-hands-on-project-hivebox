@@ -6,7 +6,8 @@ name="Test"
 expected="Hello, Test!!!"
 
 actual=$(go run main.go "$name")
-
+echo "Expected: [$expected]"
+echo "Actual:   [$actual]"
 if [ "$actual" == "$expected" ]; then
     echo "✅ Test passed!"
     exit 0
