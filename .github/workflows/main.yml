@@ -3,8 +3,6 @@ on:
   pull_request: 
     branches:
       - main
-    paths:
-      - main.go
 jobs:
   testing:
     runs-on: ubuntu-latest
