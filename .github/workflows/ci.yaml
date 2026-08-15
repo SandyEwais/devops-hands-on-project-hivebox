@@ -44,6 +44,10 @@ jobs:
           cache: true
 
       - name: Run Tests with Race Detector
+        env:
+            BOX_ID1: ${{ secrets.BOX_ID1 }}
+            BOX_ID2: ${{ secrets.BOX_ID2 }}
+            BOX_ID3: ${{ secrets.BOX_ID3 }}
         run: go test -v -race ./...
 
   # -------------------------------------------------------------
