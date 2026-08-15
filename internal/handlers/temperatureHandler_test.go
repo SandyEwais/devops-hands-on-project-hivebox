@@ -8,13 +8,9 @@ import (
 	"testing"
 	"errors"
 	"github.com/gofiber/fiber/v3"
-	"github.com/joho/godotenv"
 )
 
 func TestTemperatureHandler_Integration(t *testing.T) {
-	if err := godotenv.Load("../../.env"); err != nil {
-		t.Fatalf("failed to load .env: %v", err)
-	}
 
 	box1 := os.Getenv("BOX_ID1")
 	box2 := os.Getenv("BOX_ID2")

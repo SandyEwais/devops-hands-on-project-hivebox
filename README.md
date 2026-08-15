@@ -59,6 +59,11 @@ Here is a pre-start checklist:
 ```docker build -t hivebox .```
 - Run a container from that artifact
 ```docker run hivebox```
+- Use docker compose
+```docker compose up --build```
 
-### Installations I did 
-go get github.com/gofiber/fiber/v3
+
+### To run tests
+```go test ./internal/handlers -v```
+
+
