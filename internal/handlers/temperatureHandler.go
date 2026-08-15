@@ -14,7 +14,7 @@ import (
 )
 
 var HTTPClient = &http.Client{
-	Timeout: 10 * time.Second,
+	Timeout: 60 * time.Second,
 }
 
 type TemperatureProvider interface {
