@@ -54,4 +54,11 @@ Here is a pre-start checklist:
 
 ** ADD YOUR IMPLEMENTATION DOCUMENTATION HERE **
 
-testing commit triggering workflow
+### To run application via docker
+- Build the image using the command
+```docker build -t hivebox .```
+- Run a container from that artifact
+```docker run hivebox```
+
+### Installations I did 
+go get github.com/gofiber/fiber/v3
