@@ -1,5 +1,8 @@
 package main
 
+import (
+	"log"
+)
 
 type Application struct {
 }
@@ -7,5 +10,7 @@ type Application struct {
 func main() {
 	app := &Application{}
 	router := app.Routes()
-	router.Listen(":3000")
+	if err := router.Listen(":3000"); err != nil {
+		log.Fatalf("Server failed to start: %v", err)
+	}
 }
