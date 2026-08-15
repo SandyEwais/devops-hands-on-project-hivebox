@@ -7,8 +7,9 @@ import (
 
 
 func (app *Application) Routes() *fiber.App {
+	provider := handlers.NewOpenSenseMapProvider()
 	router := fiber.New()
 	router.Get("/version", handlers.VersionHandler)
-	router.Get("/temperature", handlers.TemperatureHandler)
+	router.Get("/temperature", handlers.TemperatureHandler(provider))
 	return router
 }

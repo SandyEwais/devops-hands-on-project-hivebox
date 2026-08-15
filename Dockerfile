@@ -11,7 +11,7 @@ RUN go mod download
 COPY . .
 
 # Build the application
-RUN go build -o app .
+RUN go build -o app ./api
 
 # Runtime stage
 FROM alpine:latest
