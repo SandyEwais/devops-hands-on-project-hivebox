@@ -4,113 +4,158 @@ import (
 	"encoding/json"
 	"fmt"
 	"hivebox/internal/responses"
-	"io"
+	"log"
 	"net/http"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v3"
 )
 
-// TemperatureHandler reads up to 3 sensor IDs from environment variables,
-// launches fetchTemperatureData concurrently for each ID, and returns the
-// aggregated results.
-// Supported env formats:
-// - SENSOR_IDS="id1,id2,id3"
-// - or SENSOR_ID_1, SENSOR_ID_2, SENSOR_ID_3
-func TemperatureHandler(c fiber.Ctx) error {
-	// gather IDs from env
-	idsEnv := os.Getenv("SENSOR_IDS")
-	var ids []string
-	if idsEnv != "" {
-		for _, s := range strings.Split(idsEnv, ",") {
-			s = strings.TrimSpace(s)
-			if s != "" {
-				ids = append(ids, s)
-			}
-		}
-	} else {
-		for i := 1; i <= 3; i++ {
-			k := fmt.Sprintf("SENSOR_ID_%d", i)
-			if v := os.Getenv(k); v != "" {
-				ids = append(ids, v)
-			}
-		}
-	}
+type fetchResult struct {
+	ID   string          `json:"id"`
+	Data json.RawMessage `json:"data,omitempty"`
+	Err  string          `json:"error,omitempty"`
+}
 
-	if len(ids) == 0 {
-		c.Status(fiber.StatusBadRequest)
-		return c.JSON(responses.APIResponse{
-			Status:  400,
-			Message: "No sensor IDs provided in environment",
+type temperatureResult struct {
+	ID          string
+	Temperature float64
+	Err         error
+}
+
+func TemperatureHandler(c fiber.Ctx) error {
+	id1 := os.Getenv("BOX_ID1")
+	id2 := os.Getenv("BOX_ID2")
+	id3 := os.Getenv("BOX_ID3")
+
+	if id1 == "" || id2 == "" || id3 == "" {
+		return c.Status(fiber.StatusInternalServerError).JSON(responses.APIResponse{
+			Status:  500,
+			Message: "Internal Server Error: sensor IDs missing",
 			Data:    nil,
 		})
 	}
 
-	// limit to 3 IDs
-	if len(ids) > 3 {
-		ids = ids[:3]
+	resultsCh := make(chan temperatureResult, 3)
+
+	go fetchTemperatureData(id1, resultsCh)
+	go fetchTemperatureData(id2, resultsCh)
+	go fetchTemperatureData(id3, resultsCh)
+
+	var sum float64
+	var validCount int
+
+	for i := 0; i < 3; i++ {
+		result := <-resultsCh
+
+		if result.Err != nil {
+			continue
+		}
+
+		sum += result.Temperature
+		validCount++
 	}
 
-	type fetchResult struct {
-		ID   string      `json:"id"`
-		Data interface{} `json:"data,omitempty"`
-		Err  string      `json:"error,omitempty"`
+	if validCount == 0 {
+		return c.Status(fiber.StatusServiceUnavailable).JSON(
+			responses.APIResponse{
+				Status:  503,
+				Message: "No valid temperature measurements available",
+				Data:    nil,
+			},
+		)
 	}
 
-	resultsCh := make(chan fetchResult, len(ids))
+	average := sum / float64(validCount)
 
-	// fire a goroutine per sensor ID
-	for _, id := range ids {
-		id := id // capture
-		go func(sensorID string) {
-			data, err := fetchTemperatureData(sensorID)
-			res := fetchResult{ID: sensorID}
-			if err != nil {
-				res.Err = err.Error()
-			} else {
-				res.Data = data
-			}
-			resultsCh <- res
-		}(id)
-	}
-
-	// collect results
-	var results []fetchResult
-	for i := 0; i < len(ids); i++ {
-		r := <-resultsCh
-		results = append(results, r)
-	}
-
-	// return aggregated JSON
 	return c.JSON(responses.APIResponse{
 		Status:  200,
-		Message: "Temperature data retrieved",
-		Data:    results,
+		Message: "Average temperature retrieved",
+		Data:    average,
 	})
 }
 
-// fetchTemperatureData queries the external API for the given sensor ID and
-// returns the raw JSON response as a json.RawMessage for inclusion in the
-// aggregated response.
-func fetchTemperatureData(sensorID string) (interface{}, error) {
-	url := fmt.Sprintf("https://api.opensensemap.org/boxes/%s", sensorID)
+func fetchTemperatureData(boxID string, resultsCh chan<- temperatureResult) {
+	url := fmt.Sprintf(
+		"https://api.opensensemap.org/boxes/%s",
+		boxID,
+	)
+
 	client := &http.Client{
 		Timeout: 10 * time.Second,
 	}
+
 	resp, err := client.Get(url)
 	if err != nil {
-		return nil, err
+		resultsCh <- temperatureResult{
+			ID:  boxID,
+			Err: err,
+		}
+		return
 	}
+
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
+	if resp.StatusCode != http.StatusOK {
+		resultsCh <- temperatureResult{
+			ID:  boxID,
+			Err: fmt.Errorf("API returned status %d", resp.StatusCode),
+		}
+		return
 	}
 
-	// Keep raw JSON so the handler can pass it through
-	var raw json.RawMessage = body
-	return raw, nil
+	var box struct {
+		Sensors []struct {
+			Title           string `json:"title"`
+			LastMeasurement struct {
+				CreatedAt time.Time `json:"createdAt"`
+				Value     float64   `json:"value,string"`
+			} `json:"lastMeasurement"`
+		} `json:"sensors"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&box); err != nil {
+		resultsCh <- temperatureResult{
+			ID:  boxID,
+			Err: err,
+		}
+		return
+	}
+
+	for _, sensor := range box.Sensors {
+		if sensor.Title != "Temperatur" {
+			continue
+		}
+
+		if time.Since(sensor.LastMeasurement.CreatedAt) > time.Hour {
+			log.Printf(
+				"Box %s: temperature measurement is too old: %s",
+				boxID,
+				sensor.LastMeasurement.CreatedAt,
+			)
+			resultsCh <- temperatureResult{
+				ID:  boxID,
+				Err: fmt.Errorf("temperature measurement is older than 1 hour"),
+			}
+			return
+		}
+		log.Printf(
+			"Box %s: temperature = %.2f°C, measured at %s",
+			boxID,
+			sensor.LastMeasurement.Value,
+			sensor.LastMeasurement.CreatedAt,
+		)
+
+		resultsCh <- temperatureResult{
+			ID:          boxID,
+			Temperature: sensor.LastMeasurement.Value,
+		}
+		return
+	}
+
+	resultsCh <- temperatureResult{
+		ID:  boxID,
+		Err: fmt.Errorf("temperature sensor not found"),
+	}
 }
