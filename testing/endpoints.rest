@@ -1,0 +1,42 @@
+```http
+### Get version
+GET http://127.0.0.1:3000/version
+Accept: application/json
+
+### Get temperature
+GET http://127.0.0.1:3000/temperature
+Accept: application/json
+
+### Create item
+POST http://127.0.0.1:3000/items
+Content-Type: application/json
+
+{
+	"name": "test-item",
+	"description": "created by rest test"
+}
+
+### Get item (replace {{id}} with returned id)
+GET http://127.0.0.1:3000/items/{{id}}
+Accept: application/json
+
+### Update item
+PATCH http://127.0.0.1:3000/items/{{id}}
+Content-Type: application/json
+
+{
+	"description": "updated description"
+}
+
+### Delete item
+DELETE http://127.0.0.1:3000/items/{{id}}
+
+### Example with Bearer token
+GET http://127.0.0.1:3000/secure
+Authorization: Bearer {{TOKEN}}
+Accept: application/json
+
+### Variables
+@id = 1
+@TOKEN = your_token_here
+```
